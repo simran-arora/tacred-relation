@@ -11,11 +11,12 @@ import torch.nn.functional as F
 from utils import constant, torch_utils
 from model import layers
 
+num_features = 8 
 class RelationModel(object):
     """ A wrapper class for the training and evaluation of models. """
-    def __init__(self, opt, emb_matrix=None):
+    def __init__(self, opt, emb_matrix=None, ent_emb_matrix=None):
         self.opt = opt
-        self.model = PositionAwareRNN(opt, emb_matrix)
+        self.model = PositionAwareRNN(opt, emb_matrix, ent_emb_matrix)
         self.criterion = nn.CrossEntropyLoss()
         self.parameters = [p for p in self.model.parameters() if p.requires_grad]
         if opt['cuda']:
@@ -26,11 +27,11 @@ class RelationModel(object):
     def update(self, batch):
         """ Run a step of forward and backward model update. """
         if self.opt['cuda']:
-            inputs = [b.cuda() for b in batch[:7]]
-            labels = batch[7].cuda()
+            inputs = [b.cuda() for b in batch[:num_features]]
+            labels = batch[num_features].cuda()
         else:
-            inputs = [b for b in batch[:7]]
-            labels = batch[7]
+            inputs = [b for b in batch[:num_features]]
+            labels = batch[num_features]
 
         # step forward
         self.model.train()
@@ -48,13 +49,13 @@ class RelationModel(object):
     def predict(self, batch, unsort=True):
         """ Run forward prediction. If unsort is True, recover the original order of the batch. """
         if self.opt['cuda']:
-            inputs = [b.cuda() for b in batch[:7]]
-            labels = batch[7].cuda()
+            inputs = [b.cuda() for b in batch[:num_features]]
+            labels = batch[num_features].cuda()
         else:
-            inputs = [b for b in batch[:7]]
-            labels = batch[7]
+            inputs = [b for b in batch[:num_features]]
+            labels = batch[num_features]
 
-        orig_idx = batch[8]
+        orig_idx = batch[num_features+1]
 
         # forward
         self.model.eval()
@@ -94,10 +95,11 @@ class RelationModel(object):
 class PositionAwareRNN(nn.Module):
     """ A sequence model for relation extraction. """
 
-    def __init__(self, opt, emb_matrix=None):
+    def __init__(self, opt, emb_matrix=None, ent_emb_matrix=None):
         super(PositionAwareRNN, self).__init__()
         self.drop = nn.Dropout(opt['dropout'])
         self.emb = nn.Embedding(opt['vocab_size'], opt['emb_dim'], padding_idx=constant.PAD_ID)
+        self.ent_emb = nn.Embedding(opt['ent_vocab_size'], opt['ent_emb_dim'], padding_idx=constant.PAD_ID)
         if opt['pos_dim'] > 0:
             self.pos_emb = nn.Embedding(len(constant.POS_TO_ID), opt['pos_dim'],
                     padding_idx=constant.PAD_ID)
@@ -105,7 +107,7 @@ class PositionAwareRNN(nn.Module):
             self.ner_emb = nn.Embedding(len(constant.NER_TO_ID), opt['ner_dim'],
                     padding_idx=constant.PAD_ID)
         
-        input_size = opt['emb_dim'] + opt['pos_dim'] + opt['ner_dim']
+        input_size = opt['emb_dim'] + opt['ent_emb_dim'] + opt['pos_dim'] + opt['ner_dim']
         self.rnn = nn.LSTM(input_size, opt['hidden_dim'], opt['num_layers'], batch_first=True,\
                 dropout=opt['dropout'])
         self.linear = nn.Linear(opt['hidden_dim'], opt['num_class'])
@@ -117,8 +119,10 @@ class PositionAwareRNN(nn.Module):
 
         self.opt = opt
         self.topn = self.opt.get('topn', 1e10)
+        self.emb_topn = self.opt.get('emb_topn', 0)
         self.use_cuda = opt['cuda']
         self.emb_matrix = emb_matrix
+        self.ent_emb_matrix = ent_emb_matrix
         self.init_weights()
     
     def init_weights(self):
@@ -127,6 +131,12 @@ class PositionAwareRNN(nn.Module):
         else:
             self.emb_matrix = torch.from_numpy(self.emb_matrix)
             self.emb.weight.data.copy_(self.emb_matrix)
+        if self.ent_emb_matrix is None:
+            self.ent_emb.weight.data[1:,:].uniform_(-1.0, 1.0) # keep padding dimension to be 0
+        else:
+            self.ent_emb_matrix = torch.from_numpy(self.ent_emb_matrix)
+            self.ent_emb.weight.data.copy_(self.ent_emb_matrix)
+
         if self.opt['pos_dim'] > 0:
             self.pos_emb.weight.data[1:,:].uniform_(-1.0, 1.0)
         if self.opt['ner_dim'] > 0:
@@ -148,6 +158,13 @@ class PositionAwareRNN(nn.Module):
         else:
             print("Finetune all embeddings.")
 
+        if self.emb_topn <= 0:
+            print("Do not finetune entity embedding layer.")
+            self.ent_emb.weight.requires_grad = False
+        else:
+            print("Finetune all entity embeddings.")
+
+
     def zero_state(self, batch_size): 
         state_shape = (self.opt['num_layers'], batch_size, self.opt['hidden_dim'])
         h0 = c0 = torch.zeros(*state_shape, requires_grad=False)
@@ -157,13 +174,14 @@ class PositionAwareRNN(nn.Module):
             return h0, c0
     
     def forward(self, inputs):
-        words, masks, pos, ner, deprel, subj_pos, obj_pos = inputs # unpack
+        words, masks, ents, pos, ner, deprel, subj_pos, obj_pos = inputs # unpack 
         seq_lens = list(masks.data.eq(constant.PAD_ID).long().sum(1).squeeze())
         batch_size = words.size()[0]
         
         # embedding lookup
         word_inputs = self.emb(words)
-        inputs = [word_inputs]
+        ent_inputs = self.ent_emb(ents)
+        inputs = [word_inputs, ent_inputs]
         if self.opt['pos_dim'] > 0:
             inputs += [self.pos_emb(pos)]
         if self.opt['ner_dim'] > 0:

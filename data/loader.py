@@ -13,15 +13,16 @@ class DataLoader(object):
     """
     Load data from json files, preprocess and prepare batches.
     """
-    def __init__(self, filename, batch_size, opt, vocab, evaluation=False):
+    def __init__(self, filename, batch_size, opt, vocab, ent_vocab, evaluation=False):
         self.batch_size = batch_size
         self.opt = opt
         self.vocab = vocab
+        self.ent_vocab = ent_vocab
         self.eval = evaluation
 
         with open(filename) as infile:
             data = json.load(infile)
-        data = self.preprocess(data, vocab, opt)
+        data = self.preprocess(data, vocab, ent_vocab, opt)
         # shuffle for training
         if not evaluation:
             indices = list(range(len(data)))
@@ -36,7 +37,7 @@ class DataLoader(object):
         self.data = data
         print("{} batches created for {}".format(len(data), filename))
 
-    def preprocess(self, data, vocab, opt):
+    def preprocess(self, data, vocab, ent_vocab, opt):
         """ Preprocess the data and convert to ids. """
         processed = []
         for d in data:
@@ -44,11 +45,13 @@ class DataLoader(object):
             if opt['lower']:
                 tokens = [t.lower() for t in tokens]
             # anonymize tokens
+            ents = d['entity_emb_id']
             ss, se = d['subj_start'], d['subj_end']
             os, oe = d['obj_start'], d['obj_end']
             tokens[ss:se+1] = ['SUBJ-'+d['subj_type']] * (se-ss+1)
             tokens[os:oe+1] = ['OBJ-'+d['obj_type']] * (oe-os+1)
             tokens = map_to_ids(tokens, vocab.word2id)
+            ents = map_to_ids(ents, ent_vocab.word2id)
             pos = map_to_ids(d['stanford_pos'], constant.POS_TO_ID)
             ner = map_to_ids(d['stanford_ner'], constant.NER_TO_ID)
             deprel = map_to_ids(d['stanford_deprel'], constant.DEPREL_TO_ID)
@@ -56,7 +59,7 @@ class DataLoader(object):
             subj_positions = get_positions(d['subj_start'], d['subj_end'], l)
             obj_positions = get_positions(d['obj_start'], d['obj_end'], l)
             relation = constant.LABEL_TO_ID[d['relation']]
-            processed += [(tokens, pos, ner, deprel, subj_positions, obj_positions, relation)]
+            processed += [(tokens, ents, pos, ner, deprel, subj_positions, obj_positions, relation)] 
         return processed
 
     def gold(self):
@@ -91,15 +94,16 @@ class DataLoader(object):
         # convert to tensors
         words = get_long_tensor(words, batch_size)
         masks = torch.eq(words, 0)
-        pos = get_long_tensor(batch[1], batch_size)
-        ner = get_long_tensor(batch[2], batch_size)
-        deprel = get_long_tensor(batch[3], batch_size)
-        subj_positions = get_long_tensor(batch[4], batch_size)
-        obj_positions = get_long_tensor(batch[5], batch_size)
+        ents = get_long_tensor(batch[1], batch_size)
+        pos = get_long_tensor(batch[2], batch_size)
+        ner = get_long_tensor(batch[3], batch_size) 
+        deprel = get_long_tensor(batch[4], batch_size)
+        subj_positions = get_long_tensor(batch[5], batch_size)
+        obj_positions = get_long_tensor(batch[6], batch_size) 
 
-        rels = torch.LongTensor(batch[6])
+        rels = torch.LongTensor(batch[7]) 
 
-        return (words, masks, pos, ner, deprel, subj_positions, obj_positions, rels, orig_idx)
+        return (words, masks, ents, pos, ner, deprel, subj_positions, obj_positions, rels, orig_idx) 
 
     def __iter__(self):
         for i in range(self.__len__()):

@@ -19,9 +19,19 @@ from utils import scorer, constant, helper
 from utils.vocab import Vocab
 
 parser = argparse.ArgumentParser()
+
+# word embeddings
 parser.add_argument('--data_dir', type=str, default='dataset/tacred')
 parser.add_argument('--vocab_dir', type=str, default='dataset/vocab')
 parser.add_argument('--emb_dim', type=int, default=300, help='Word embedding dimension.')
+parser.add_argument('--train_file_name', type=str, default='/train_ent.json', help='train data with bootleg feature added')
+parser.add_argument('--dev_file_name', type=str, default='/dev_ent.json', help='dev data with bootleg feature added')
+
+# bootleg embeddings
+parser.add_argument('--ent_vocab_dir', type=str, default='dataset/tacred')
+parser.add_argument('--ent_emb_dim', type=int, default=512, help='Entity embedding dimension.') 
+parser.add_argument('--use_ctx_ent', action='store_true', help='whether to use contextual entity embeddings')
+
 parser.add_argument('--ner_dim', type=int, default=30, help='NER embedding dimension.')
 parser.add_argument('--pos_dim', type=int, default=30, help='POS embedding dimension.')
 parser.add_argument('--hidden_dim', type=int, default=200, help='RNN hidden state size.')
@@ -78,10 +88,26 @@ emb_matrix = np.load(emb_file)
 assert emb_matrix.shape[0] == vocab.size
 assert emb_matrix.shape[1] == opt['emb_dim']
 
+# load contextual entity vocab
+if args.use_ctx_ent:
+    ent_vocab_file = opt['ent_vocab_dir'] + '/ent_vocab.pkl'
+    ent_vocab = Vocab(ent_vocab_file, load=True)
+    opt['ent_vocab_size'] = ent_vocab.size
+    ent_emb_file = opt['ent_vocab_dir'] + '/ent_embedding.npy'
+    ent_emb_matrix = np.load(ent_emb_file)
+    assert ent_emb_matrix.shape[0] == ent_vocab.size
+    print(ent_emb_matrix.shape[1], opt['ent_emb_dim'])
+    assert ent_emb_matrix.shape[1] == opt['ent_emb_dim']
+else:
+    ent_vocab_file = ""
+    ent_vocab = None
+    ent_emb_file = ""                
+    ent_emb_matrix = None
+
 # load data
 print("Loading data from {} with batch size {}...".format(opt['data_dir'], opt['batch_size']))
-train_batch = DataLoader(opt['data_dir'] + '/train.json', opt['batch_size'], opt, vocab, evaluation=False)
-dev_batch = DataLoader(opt['data_dir'] + '/dev.json', opt['batch_size'], opt, vocab, evaluation=True)
+train_batch = DataLoader(opt['data_dir'] + opt['train_file_name'], opt['batch_size'], opt, vocab, ent_vocab, first_ent_span_token=args.use_first_ent_span_tok, evaluation=False)
+dev_batch = DataLoader(opt['data_dir'] + opt['dev_file_name'], opt['batch_size'], opt, vocab, ent_vocab, first_ent_span_token=args.use_first_ent_span_tok, evaluation=True)                
 
 model_id = opt['id'] if len(opt['id']) > 1 else '0' + opt['id']
 model_save_dir = opt['save_dir'] + '/' + model_id
@@ -91,13 +117,15 @@ helper.ensure_dir(model_save_dir, verbose=True)
 # save config
 helper.save_config(opt, model_save_dir + '/config.json', verbose=True)
 vocab.save(model_save_dir + '/vocab.pkl')
+if args.use_ctx_ent:
+    ent_vocab.save(model_save_dir + '/ent_vocab.pkl')
 file_logger = helper.FileLogger(model_save_dir + '/' + opt['log'], header="# epoch\ttrain_loss\tdev_loss\tdev_f1")
 
 # print model info
 helper.print_config(opt)
 
 # model
-model = RelationModel(opt, emb_matrix=emb_matrix)
+model = RelationModel(opt, emb_matrix=emb_matrix, ent_emb_matrix=ent_emb_matrix)
 
 id2label = dict([(v,k) for k,v in constant.LABEL_TO_ID.items()])
 dev_f1_history = []

@@ -22,6 +22,9 @@ parser.add_argument('--data_dir', type=str, default='dataset/tacred')
 parser.add_argument('--dataset', type=str, default='test', help="Evaluate on dev or test.")
 parser.add_argument('--out', type=str, default='', help="Save model predictions to this dir.")
 
+parser.add_argument('--use_ctx_ent', action='store_true', help='whether to use contextual entity embeddings')
+parser.add_argument('--use_first_ent_span_tok', action='store_true', help='whether to just use the first token in the entity span')
+
 parser.add_argument('--seed', type=int, default=1234)
 parser.add_argument('--cuda', type=bool, default=torch.cuda.is_available())
 parser.add_argument('--cpu', action='store_true')
@@ -46,10 +49,21 @@ vocab_file = args.model_dir + '/vocab.pkl'
 vocab = Vocab(vocab_file, load=True)
 assert opt['vocab_size'] == vocab.size, "Vocab size must match that in the saved model."
 
+# load entity vocab
+if args.use_ctx_ent:
+    ent_vocab_file = args.model_dir + '/ent_vocab.pkl'
+    ent_vocab = Vocab(ent_vocab_file, load=True)
+    assert opt['ent_vocab_size'] == ent_vocab.size
+else:
+    ent_vocab_file = ""
+    ent_vocab = None
+    ent_emb_file = ""
+    ent_emb_matrix = None
+
 # load data
 data_file = opt['data_dir'] + '/{}.json'.format(args.dataset)
 print("Loading data from {} with batch size {}...".format(data_file, opt['batch_size']))
-batch = DataLoader(data_file, opt['batch_size'], opt, vocab, evaluation=True)
+batch = DataLoader(data_file, opt['batch_size'], opt, vocab, ent_vocab, first_ent_span_token=args.use_first_ent_span_tok, evaluation=True)
 
 helper.print_config(opt)
 id2label = dict([(v,k) for k,v in constant.LABEL_TO_ID.items()])
