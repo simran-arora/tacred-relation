@@ -52,8 +52,16 @@ Use `--topn N` to finetune the top N word vectors only. The script will do the p
 
 Train an LSTM model with:
 ```
-python train.py --data_dir dataset/tacred --vocab_dir dataset/vocab --no-attn --id 01 --info "LSTM model"
+python train.py --data_dir dataset/tacred --vocab_dir dataset/vocab --no-attn --id 01 --info "LSTM model" 
 ```
+
+To train with Bootleg embeddings, add the flags: 
+the flags to use Bootleg are: 
+```
+python eval.py saved_models/00 --dataset test --use_ctx_ent 
+```
+
+Additionally, prior work suggests that creating a feature for the first token in a span -- for example if an entity is Barack Obama, and I only attach the entity representation at the position Barack, rather than at both Barack and Obama -- the above Bootleg preparation includes a feature to only use the first token and the flag to signal this during training is ```--use_first_ent_span_tok```
 
 Model checkpoints and logs will be saved to `./saved_models/00`.
 
@@ -62,6 +70,11 @@ Model checkpoints and logs will be saved to `./saved_models/00`.
 Run evaluation on the test set with:
 ```
 python eval.py saved_models/00 --dataset test
+```
+
+Again the flags to use Bootleg are: 
+```
+python eval.py saved_models/00 --dataset test --use_ctx_ent --use_first_ent_span_tok
 ```
 
 This will use the `best_model.pt` by default. Use `--model checkpoint_epoch_10.pt` to specify a model checkpoint file. Add `--out saved_models/out/test1.pkl` to write model probability output to files (for ensemble, etc.).

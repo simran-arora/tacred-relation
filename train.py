@@ -31,6 +31,8 @@ parser.add_argument('--dev_file_name', type=str, default='/dev_ent.json', help='
 parser.add_argument('--ent_vocab_dir', type=str, default='dataset/tacred')
 parser.add_argument('--ent_emb_dim', type=int, default=512, help='Entity embedding dimension.') 
 parser.add_argument('--use_ctx_ent', action='store_true', help='whether to use contextual entity embeddings')
+parser.add_argument('--use_first_ent_span_tok', action='store_true', help='whether to just use first token in entity span')
+
 
 parser.add_argument('--ner_dim', type=int, default=30, help='NER embedding dimension.')
 parser.add_argument('--pos_dim', type=int, default=30, help='POS embedding dimension.')
