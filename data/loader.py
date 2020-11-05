@@ -13,11 +13,12 @@ class DataLoader(object):
     """
     Load data from json files, preprocess and prepare batches.
     """
-    def __init__(self, filename, batch_size, opt, vocab, ent_vocab, evaluation=False):
+    def __init__(self, filename, batch_size, opt, vocab, ent_vocab, first_ent_span_token=False, evaluation=False):
         self.batch_size = batch_size
         self.opt = opt
         self.vocab = vocab
         self.ent_vocab = ent_vocab
+        self.first_ent_span_token=first_ent_span_token
         self.eval = evaluation
 
         with open(filename) as infile:
@@ -45,13 +46,21 @@ class DataLoader(object):
             if opt['lower']:
                 tokens = [t.lower() for t in tokens]
             # anonymize tokens
-            ents = d['entity_emb_id']
+            
+            # bootleg feature
+            ents = None
+            if ent_vocab:
+                if self.first_ent_span_token:
+                    ents = d['entity_emb_id_first']
+                else:
+                    ents = d['entity_emb_id']
+                ents = map_to_ids(ents, ent_vocab.word2id)
+                
             ss, se = d['subj_start'], d['subj_end']
             os, oe = d['obj_start'], d['obj_end']
             tokens[ss:se+1] = ['SUBJ-'+d['subj_type']] * (se-ss+1)
             tokens[os:oe+1] = ['OBJ-'+d['obj_type']] * (oe-os+1)
             tokens = map_to_ids(tokens, vocab.word2id)
-            ents = map_to_ids(ents, ent_vocab.word2id)
             pos = map_to_ids(d['stanford_pos'], constant.POS_TO_ID)
             ner = map_to_ids(d['stanford_ner'], constant.NER_TO_ID)
             deprel = map_to_ids(d['stanford_deprel'], constant.DEPREL_TO_ID)
@@ -60,6 +69,7 @@ class DataLoader(object):
             obj_positions = get_positions(d['obj_start'], d['obj_end'], l)
             relation = constant.LABEL_TO_ID[d['relation']]
             processed += [(tokens, ents, pos, ner, deprel, subj_positions, obj_positions, relation)] 
+        self.num_features = len(processed[0])
         return processed
 
     def gold(self):
@@ -79,7 +89,7 @@ class DataLoader(object):
         batch = self.data[key]
         batch_size = len(batch)
         batch = list(zip(*batch))
-        assert len(batch) == 7
+        assert len(batch) == self.num_features
 
         # sort all fields by lens for easy RNN operations
         lens = [len(x) for x in batch[0]]

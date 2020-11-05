@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('model_dir', type=str, help='Directory of the model.')
 parser.add_argument('--model', type=str, default='best_model.pt', help='Name of the model file.')
 parser.add_argument('--data_dir', type=str, default='dataset/tacred')
-parser.add_argument('--dataset', type=str, default='test', help="Evaluate on dev or test.")
+parser.add_argument('--dataset', type=str, default='test_ent', help="Evaluate on dev or test.")
 parser.add_argument('--out', type=str, default='', help="Save model predictions to this dir.")
 
 parser.add_argument('--use_ctx_ent', action='store_true', help='whether to use contextual entity embeddings')

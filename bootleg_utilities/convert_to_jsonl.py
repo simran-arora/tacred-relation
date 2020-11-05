@@ -86,8 +86,8 @@ def create_one_file(train, dev, test, all_out, subjobj=False):
 
 source_path = # FILL IN PATH TO TACRED DATA
 inname_train = "{}train.json".format(source_path)
-inname_dev = "{}dev_rev.json".format(source_path)
-inname_test = "{}test_rev.json".format(source_path)
+inname_dev = "{}dev.json".format(source_path)
+inname_test = "{}test.json".format(source_path)
 outname_all = '{}all_tacred_bootinput.jsonl'.format(source_path)
 create_one_file(inname_train, inname_dev, inname_test, outname_all, subjobj = False)
 

@@ -33,12 +33,12 @@ Using the output file from mention extraction, next obtain the Bootleg contextua
 
 For convenience, the steps covered in the end2end_ned tutorial are replicated in the following file: ```tacred_e2ebootleg_ned.py```
 
-Next, add the Bootleg features to the TACRED datasets: we have provided the script ```add_bootleg_features.ipynb``` to do so. 
+Next, add the Bootleg features to the TACRED datasets: we have provided the script ```add_bootleg_features.ipynb``` to do so. In the file ```dataset/tacred/dev_samples_w_bootleg_features.json``` we have provided examples of the output data with Bootleg features (based on the original dev set samples publically released from TACRED). 
 
 Once the TACRED data is prepared, prepare the Bootleg entity vocabulary and initial vectors with:
 ```python prepare_entity_vocab_bootleg.py /path/to/bootleg_embs.npy```
 
-The specific modifications required in the code include adding the Bootleg feature to the dataloader and concatenating the embedding ti the RNN input.  
+The specific modifications required in the code include adding the Bootleg feature to the dataloader and concatenating the embedding to the RNN input.  
 
 
 ## Training
@@ -55,13 +55,12 @@ Train an LSTM model with:
 python train.py --data_dir dataset/tacred --vocab_dir dataset/vocab --no-attn --id 01 --info "LSTM model" 
 ```
 
-To train with Bootleg embeddings, add the flags: 
-the flags to use Bootleg are: 
+To train with Bootleg embeddings, add the flag ```--use_ctx_ent``` as shown below: 
 ```
 python train.py --data_dir dataset/tacred --vocab_dir dataset/vocab --no-attn --id 01 --info "LSTM model" --use_ctx_ent 
 ```
 
-Additionally, prior work suggests that creating a feature for the first token in a span -- for example if an entity is Barack Obama, and I only attach the entity representation at the position Barack, rather than at both Barack and Obama -- the above Bootleg preparation includes a feature to only use the first token and the flag to signal this during training is ```--use_first_ent_span_tok```
+Additionally, prior works have used a feature for the first token in a span -- for example if an entity is Barack Obama, and I only attach the entity representation at the position Barack, rather than at both Barack and Obama -- the above Bootleg preparation includes a feature to only use the first token and the flag to signal this during training is ```--use_first_ent_span_tok```
 
 Model checkpoints and logs will be saved to `./saved_models/00`.
 
